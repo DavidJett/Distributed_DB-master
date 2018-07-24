@@ -50,9 +50,8 @@ public interface WorkflowController extends Remote {
      * @throws RemoteException             on communications failure.
      * @throws TransactionAbortedException if transaction was aborted.
      * @throws InvalidTransactionException if transaction id is invalid.
-     *
      */
-    public int commit(int xid)
+    public boolean commit(int xid)
             throws RemoteException,
             TransactionAbortedException,
             InvalidTransactionException;
@@ -64,7 +63,7 @@ public interface WorkflowController extends Remote {
      * @throws RemoteException             on communications failure.
      * @throws InvalidTransactionException if transaction id is invalid.
      */
-    public int abort(int xid)
+    public void abort(int xid)
             throws RemoteException,
             InvalidTransactionException;
 

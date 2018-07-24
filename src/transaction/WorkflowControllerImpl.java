@@ -1,20 +1,11 @@
 package transaction;
 
-import lockmgr.DeadlockException;
-import sun.misc.InvalidJarIndexException;
-
 import java.io.FileInputStream;
 import java.rmi.Naming;
 import java.rmi.RMISecurityManager;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.util.Properties;
-
-import transaction.Car;
-import transaction.Flight;
-import transaction.Hotel;
-import transaction.WorkflowController;
-
 
 /**
  * Workflow Controller for the Distributed Travel Reservation System.
@@ -78,42 +69,7 @@ public class WorkflowControllerImpl
 
         while (!reconnect()) {
             // would be better to sleep a while
-            try{
-                Thread.sleep(800);
-            }catch(InterruptedException e){
-                //
-            }
         }
-        new Thread(){
-            public void run(){
-                while(true){
-                    //test whether all the resources are accessible
-                    try{
-                        if (tm != null)
-                            tm.ping();
-                        if (rmCars != null)
-                            rmCars.ping();
-                        if (rmCustomers != null)
-                            rmCustomers.ping();
-                        if (rmFlights != null)
-                            rmFlights.ping();
-                        if (rmRooms != null)
-                            rmRooms.ping();
-                    }catch(Exception e){
-                        try{
-                            reconnect();
-                        }catch (RemoteException e2){
-                            e.printStackTrace();
-                        }
-                    }
-                    try{
-                        Thread.sleep(800);
-                    }catch(InterruptedException e){
-                        //
-                    }
-                }
-            }
-        }.start();
     }
 
 
@@ -122,38 +78,19 @@ public class WorkflowControllerImpl
             throws RemoteException {
         return (xidCounter++);
     }
-    //Commit a transaction
-    public int commit(int xid)
+
+    public boolean commit(int xid)
             throws RemoteException,
             TransactionAbortedException,
             InvalidTransactionException {
         System.out.println("Committing");
-        int result=0;
-        try{
-            if(tm.commit(xid)){
-                result=1;
-                System.out.print("Finished")
-            }
-        }catch(TransactionCommitException e){
-            result=-1;
-        }
-        return result;
+        return true;
     }
 
-    public int abort(int xid)
+    public void abort(int xid)
             throws RemoteException,
             InvalidTransactionException {
-        System.out.print("Aborting!");
-        int result=0;
-        try{
-            if(tm.abort(xid)){
-                result=1;
-            }
-        }catch(TransactionAbortedException e){
-                result=-1;
-        }
-        System.out.print("Finished!");
-        return result;
+        return;
     }
 
 
@@ -162,107 +99,27 @@ public class WorkflowControllerImpl
             throws RemoteException,
             TransactionAbortedException,
             InvalidTransactionException {
-        boolean flag=true;
-        try{
-            if(xid<0||flightNum==null||numSeats<0)
-                return false;
-            ResourceItem item=rmFlights.query(xid,WorkflowController.FlightTableName,flightNum);
-            int curPrice=0,curSeatNum=0,curAvailNum=0;
-            if(item!=null){
-                curPrice=price<0?Integer.parseInt(item.getIndex("price").toString()):price;
-                curSeatNum=numSeats<0?Integer.parseInt(item.getIndex("seatNum").toString()):Integer.parseInt(item.getIndex("seatNum").toString())+numSeats;
-                curAvailNum=numSeats<0?Integer.parseInt(item.getIndex("availNum").toString()):Integer.parseInt(item.getIndex("availNum").toString())+numSeats;
-                ResourceItem newItem = new Flight(flightNum, curPrice, curSeatNum, curAvailNum);
-                if(rmFlights.update(xid,WorkflowController.FlightTableName,newItem)==false){
-                    System.out.println("The addition of Flight:"+flightNum+" failed!");
-                    return false;
-                }
-            }
-        }catch(DeadlockException e){
-            e.printStackTrace();
-        }catch(RemoteException e){
-            flag=false;
-            try{
-                tm.abort(xid);
-            }catch(TransactionAbortedException e2){
-                e2.printStackTrace();
-              }
-            }catch(NumberFormatException e){
-                e.printStackTrace();
-            }catch(InvalidJarIndexException e){
-                e.printStackTrace();
-            }
-            if(flag==false){
-                System.out.println("The addition of Flight:"+flightNum+" failed!");
-            }
-            return flag;
+        flightcounter += numSeats;
+        flightprice = price;
+        return true;
     }
-    //problematic
+
     public boolean deleteFlight(int xid, String flightNum)
             throws RemoteException,
             TransactionAbortedException,
             InvalidTransactionException {
-        int availNum=0,seatNum=0;
-        boolean flag=true;
-        try{
-            ResourceItem item=rmFlights.query(xid,WorkflowController.ReservationTableName,flightNum);
-            if(item!=null){
-                seatNum=Integer.parseInt(item.getIndex("seatNum").toString());
-                availNum=Integer.parseInt(item.getIndex("availNum").toString());
-            }
-        }catch(RemoteException e){
-            flag=false;
-            tm.abort(xid);
-        }catch(DeadlockException e){
-            e.printStackTrace();
-        }catch(NumberFormatException e){
-            e.printStackTrace();
-        }catch(InvalidIndexException e){
-            e.printStackTrace();
-        }
-        if(flag==false) {
-            System.out.println("The deletion of Flight has failed!");
-        }
-        return false;
+        flightcounter = 0;
+        flightprice = 0;
+        return true;
     }
 
     public boolean addRooms(int xid, String location, int numRooms, int price)
             throws RemoteException,
             TransactionAbortedException,
             InvalidTransactionException {
-        boolean flag=true;
-        try{
-            if(xid<0||location==null||numRooms<0)
-                return false;
-            ResourceItem item=rmRooms.query(xid,WorkflowController.HotelTableName,location);
-            int curPrice=0,curRoomNum=0,curAvailNum=0;
-            if(item!=null){
-                curPrice=price<0?Integer.parseInt(item.getIndex("price").toString()):price;
-                curRoomNum=numRooms<0?Integer.parseInt(item.getIndex("roomNum").toString()):Integer.parseInt(item.getIndex("roomNum").toString())+numRooms;
-                curAvailNum=numRooms<0?Integer.parseInt(item.getIndex("availNum").toString()):Integer.parseInt(item.getIndex("availNum").toString())+numRooms;
-                ResourceItem newItem = new Hotel(location, curPrice, curRoomNum, curAvailNum);
-                if(rmRooms.update(xid,WorkflowController.HotelTableName,newItem)==false){
-                    System.out.println("The addition of Hotel:"+location+" failed!");
-                    return false;
-                }
-            }
-        }catch(DeadlockException e){
-            e.printStackTrace();
-        }catch(RemoteException e){
-            flag=false;
-            try{
-                tm.abort(xid);
-            }catch(TransactionAbortedException e2){
-            }
-        }catch(NumberFormatException e){
-            e.printStackTrace();
-        }catch(InvalidJarIndexException e){
-            e.printStackTrace();
-        }
-        if(flag==false){
-            System.out.println("The addition of Hotel:"+location+" failed!");
-        }
-        return flag;
+        roomscounter += numRooms;
+        roomsprice = price;
+        return true;
     }
 
     public boolean deleteRooms(int xid, String location, int numRooms)
